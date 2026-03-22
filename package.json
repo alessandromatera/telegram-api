@@ -1,0 +1,42 @@
+{
+  "name": "telegram-api",
+  "version": "0.1.0",
+  "description": "Node-RED palette for Telegram user-account automation over MTProto.",
+  "private": true,
+  "main": "dist/nodes/telegram-api.js",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "build": "npm run clean && tsc -p tsconfig.json && node scripts/copy-static.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "keywords": [
+    "node-red",
+    "telegram",
+    "mtproto",
+    "gramjs"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "big-integer": "^1.6.52",
+    "telegram": "^2.26.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.14",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8"
+  },
+  "node-red": {
+    "version": ">=4.0.0",
+    "nodes": {
+      "telegram-api": "dist/nodes/telegram-api.js"
+    }
+  }
+}
