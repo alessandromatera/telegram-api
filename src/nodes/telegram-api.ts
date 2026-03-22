@@ -277,10 +277,15 @@ module.exports = function registerTelegramApiNodes(RED: NodeRedRuntime) {
     }
 
     const includeRaw = Boolean(config.includeRaw);
+    const unreadOnly = Boolean(config.unreadOnly);
     const removeStatusListener = account.client.onStatus((status: AuthStatus) => {
       this.status(statusToIndicator(status));
     });
     const removeMessageListener = account.client.onMessage((message: Record<string, unknown>) => {
+      if (unreadOnly && message.outgoing) {
+        return;
+      }
+
       const telegramData = includeRaw ? message : { ...message, raw: undefined };
       this.send({
         payload: message.text ?? "",
@@ -337,6 +342,7 @@ module.exports = function registerTelegramApiNodes(RED: NodeRedRuntime) {
     const defaultPeer = typeof config.peer === "string" ? config.peer.trim() : undefined;
     const defaultLimit = Math.max(Number(config.limit ?? 10), 1);
     const includeRaw = Boolean(config.includeRaw);
+    const unreadOnly = Boolean(config.unreadOnly);
     const removeStatusListener = account.client.onStatus((status: AuthStatus) => {
       this.status(statusToIndicator(status));
     });
@@ -346,7 +352,8 @@ module.exports = function registerTelegramApiNodes(RED: NodeRedRuntime) {
         const request = parseHistoryRequest(msg, {
           includeRaw,
           limit: defaultLimit,
-          peer: defaultPeer
+          peer: defaultPeer,
+          unreadOnly
         });
         const messages = await account.client.getHistory(request);
         send(

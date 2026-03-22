@@ -47,7 +47,8 @@ describe("parseHistoryRequest", () => {
       },
       {
         includeRaw: false,
-        limit: 10
+        limit: 10,
+        unreadOnly: false
       }
     );
 
@@ -55,8 +56,32 @@ describe("parseHistoryRequest", () => {
       includeRaw: false,
       limit: 100,
       offsetId: undefined,
-      peer: "@history-target"
+      peer: "@history-target",
+      unreadOnly: false
+    });
+  });
+
+  it("supports unread-only history requests", () => {
+    const request = parseHistoryRequest(
+      {
+        telegram: {
+          peer: "@history-target",
+          unreadOnly: true
+        }
+      },
+      {
+        includeRaw: false,
+        limit: 10,
+        unreadOnly: false
+      }
+    );
+
+    expect(request).toEqual({
+      includeRaw: false,
+      limit: 10,
+      offsetId: undefined,
+      peer: "@history-target",
+      unreadOnly: true
     });
   });
 });
-

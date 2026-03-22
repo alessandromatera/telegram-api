@@ -92,12 +92,29 @@ export class TelegramRuntimeClient {
       throw new Error("Telegram client does not support history reads.");
     }
 
-    const messages = await client.getMessages(entity, {
+    const options: Record<string, unknown> = {
       limit: request.limit,
       offsetId: request.offsetId
-    });
+    };
 
-    return Array.from(messages, (message) => normalizeMessage(message, request.includeRaw));
+    if (request.unreadOnly) {
+      const { readInboxMaxId, unreadCount } = await this.getUnreadHistoryWindow(client, request.peer);
+      if (unreadCount <= 0) {
+        return [];
+      }
+
+      options.limit = Math.min(request.limit, unreadCount);
+      options.minId = readInboxMaxId;
+    }
+
+    const messages = await client.getMessages(entity, options);
+    const normalizedMessages = Array.from(messages, (message) => normalizeMessage(message, request.includeRaw));
+
+    if (!request.unreadOnly) {
+      return normalizedMessages;
+    }
+
+    return normalizedMessages.filter((message) => !message.outgoing);
   }
 
   getStatus(): AuthStatus {
@@ -254,6 +271,56 @@ export class TelegramRuntimeClient {
 
       throw error;
     }
+  }
+
+  private async resolveInputEntity(client: TelegramClientLike, value: unknown): Promise<unknown> {
+    if (!client.getInputEntity) {
+      throw new Error("Telegram client does not support unread history reads.");
+    }
+
+    const input = peerInputFromValue(value);
+    try {
+      return await client.getInputEntity(input);
+    } catch (error) {
+      if (typeof input === "number" || typeof input === "string") {
+        return client.getInputEntity(this.buildPeerFallback(input));
+      }
+
+      throw error;
+    }
+  }
+
+  private async getUnreadHistoryWindow(
+    client: TelegramClientLike,
+    peer: unknown
+  ): Promise<{ readInboxMaxId: number; unreadCount: number }> {
+    if (!client.invoke) {
+      throw new Error("Telegram client does not support unread history reads.");
+    }
+
+    const inputPeer = await this.resolveInputEntity(client, peer);
+    const response = await client.invoke(
+      new Api.messages.GetPeerDialogs({
+        peers: [new Api.InputDialogPeer({ peer: inputPeer as Api.TypeInputPeer })]
+      })
+    );
+    const dialogs =
+      typeof response === "object" && response !== null && "dialogs" in response && Array.isArray((response as { dialogs?: unknown[] }).dialogs)
+        ? (response as { dialogs: unknown[] }).dialogs
+        : [];
+    const dialog = dialogs[0] as Record<string, unknown> | undefined;
+
+    if (!dialog) {
+      return { readInboxMaxId: 0, unreadCount: 0 };
+    }
+
+    const readInboxMaxId = Number(dialog.readInboxMaxId);
+    const unreadCount = Number(dialog.unreadCount);
+
+    return {
+      readInboxMaxId: Number.isFinite(readInboxMaxId) ? Math.max(0, Math.trunc(readInboxMaxId)) : 0,
+      unreadCount: Number.isFinite(unreadCount) ? Math.max(0, Math.trunc(unreadCount)) : 0
+    };
   }
 
   private buildPeerFallback(input: number | string): Api.TypePeer | string | number {

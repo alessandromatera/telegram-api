@@ -5,9 +5,9 @@ Node-RED palette for driving a real Telegram user account over MTProto with [Gra
 ## What it includes
 
 - `telegram-api-config`: stores `api_id`, `api_hash`, phone number, reconnect settings, and the encrypted session string
-- `telegram-api-in`: emits incoming messages as normalized Node-RED messages
+- `telegram-api-in`: emits incoming messages as normalized Node-RED messages, optionally ignoring outgoing/self live events
 - `telegram-api-send`: sends text or media to a peer
-- `telegram-api-history`: fetches recent messages for a peer
+- `telegram-api-history`: fetches recent messages for a peer, optionally only unread incoming messages
 
 ## Runtime requirements
 
@@ -148,6 +148,7 @@ After importing:
     "name": "Incoming messages",
     "account": "b2f4d7c2e9b00102",
     "includeRaw": false,
+    "unreadOnly": false,
     "x": 190,
     "y": 200,
     "wires": [
@@ -249,6 +250,11 @@ Common metadata fields:
 - `msg.telegram.media`
 - `msg.telegram.raw` when the node is configured with `Include Raw`
 
+`telegram-api-in` node options:
+
+- `Unread Only`: ignores outgoing/self live events and only emits unread incoming live messages
+- This is a live event filter only. It does not backfill unread messages that arrived before the node started
+
 ## Send node input patterns
 
 Text only:
@@ -287,6 +293,13 @@ msg.telegram = {
 };
 return msg;
 ```
+
+History node input supports:
+
+- `msg.telegram.peer` to override the configured peer
+- `msg.telegram.limit` or `msg.limit` to control how many messages are returned
+- `msg.telegram.offsetId` or `msg.offsetId` to paginate older history
+- `msg.telegram.unreadOnly` or `msg.unreadOnly` to return only unread incoming messages
 
 ## Current v1 scope
 

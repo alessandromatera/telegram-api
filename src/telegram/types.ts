@@ -67,6 +67,7 @@ export interface HistoryRequest {
   limit: number;
   offsetId?: number;
   peer: string | number | Record<string, unknown>;
+  unreadOnly: boolean;
 }
 
 export interface RuntimeClientOptions extends ConnectionCredentials {
@@ -91,7 +92,9 @@ export interface TelegramClientLike {
   disconnect(): Promise<void>;
   disconnected?: Promise<unknown>;
   getEntity?(input: unknown): Promise<unknown>;
+  getInputEntity?(input: unknown): Promise<unknown>;
   getMessages?(entity: unknown, options: Record<string, unknown>): Promise<unknown[]>;
+  invoke?(request: unknown): Promise<unknown>;
   removeEventHandler?(handler: (event: unknown) => void, eventBuilder?: unknown): void;
   sendFile?(entity: unknown, options: Record<string, unknown>): Promise<unknown>;
   sendMessage?(entity: unknown, options: Record<string, unknown>): Promise<unknown>;

@@ -103,7 +103,7 @@ export function parseSendRequest(msg: Record<string, unknown>, defaultPeer?: unk
 
 export function parseHistoryRequest(
   msg: Record<string, unknown>,
-  defaults: { includeRaw: boolean; limit: number; peer?: unknown }
+  defaults: { includeRaw: boolean; limit: number; peer?: unknown; unreadOnly: boolean }
 ): HistoryRequest {
   const telegram = (msg.telegram as Record<string, unknown> | undefined) ?? {};
   const peer = normalizePeerValue(telegram.peer ?? msg.peer ?? defaults.peer);
@@ -118,6 +118,7 @@ export function parseHistoryRequest(
     includeRaw: Boolean(telegram.includeRaw ?? defaults.includeRaw),
     limit: normalizeInteger(telegram.limit ?? msg.limit, defaults.limit),
     offsetId: offsetId === undefined ? undefined : normalizeInteger(offsetId, 0, 0, Number.MAX_SAFE_INTEGER),
-    peer
+    peer,
+    unreadOnly: Boolean(telegram.unreadOnly ?? msg.unreadOnly ?? defaults.unreadOnly)
   };
 }
