@@ -1,9 +1,21 @@
 {
-  "name": "telegram-api",
+  "name": "@alessandromatera/node-red-telegram-api",
   "version": "0.1.0",
   "description": "Node-RED palette for Telegram user-account automation over MTProto.",
-  "private": true,
+  "license": "MIT",
+  "author": "Alessandro",
   "main": "dist/nodes/telegram-api.js",
+  "homepage": "https://github.com/alessandromatera/telegram-api#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alessandromatera/telegram-api.git"
+  },
+  "bugs": {
+    "url": "https://github.com/alessandromatera/telegram-api/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "dist",
     "README.md"

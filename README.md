@@ -1,4 +1,4 @@
-# telegram-api
+# @alessandromatera/node-red-telegram-api
 
 Node-RED palette for driving a real Telegram user account over MTProto with [GramJS](https://gram.js.org/), rather than the Telegram Bot API.
 
@@ -15,7 +15,16 @@ Node-RED palette for driving a real Telegram user account over MTProto with [Gra
 - Node-RED 4+
 - A Telegram API app created at [my.telegram.org](https://my.telegram.org)
 
-## Install locally
+## Install from npm
+
+```bash
+cd ~/.node-red
+npm install @alessandromatera/node-red-telegram-api
+```
+
+Then restart Node-RED and add the `telegram user` nodes from the palette.
+
+## Install locally for development
 
 ```bash
 npm install
@@ -23,8 +32,6 @@ npm run build
 cd ~/.node-red
 npm install /absolute/path/to/telegram-api
 ```
-
-Then restart Node-RED and add the `telegram user` nodes from the palette.
 
 ## Get your API ID and API hash
 
