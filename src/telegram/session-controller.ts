@@ -98,9 +98,13 @@ export class SessionController {
     this.currentCredentials = sanitizeCredentials(credentials);
 
     if (!this.connectPromise) {
-      this.connectPromise = this.doConnect(this.currentCredentials).finally(() => {
-        this.connectPromise = undefined;
+      const nextConnectPromise = this.doConnect(this.currentCredentials).finally(() => {
+        if (this.connectPromise === nextConnectPromise) {
+          this.connectPromise = undefined;
+        }
       });
+      this.connectPromise = nextConnectPromise;
+      void nextConnectPromise.catch(() => undefined);
     }
 
     return this.getStatus();

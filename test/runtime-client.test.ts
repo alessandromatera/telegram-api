@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import bigInt from "big-integer";
 import { Api } from "telegram";
 
@@ -132,6 +132,34 @@ class ContextSensitiveClient implements TelegramClientLike {
   }
 }
 
+class RejectingDisconnectClient implements TelegramClientLike {
+  public readonly session = {
+    save: () => "SESSION"
+  };
+
+  constructor(private readonly disconnectError: Error) {}
+
+  addEventHandler(): void {
+    return;
+  }
+
+  async disconnect(): Promise<void> {
+    return;
+  }
+
+  get disconnected(): Promise<void> {
+    return Promise.reject(this.disconnectError);
+  }
+
+  removeEventHandler(): void {
+    return;
+  }
+
+  async start(): Promise<void> {
+    return;
+  }
+}
+
 function createRuntime(client: TelegramClientLike, status: AuthStatus = { label: "Connected", state: "connected" }): TelegramRuntimeClient {
   const runtime = new TelegramRuntimeClient({
     apiHash: "hash",
@@ -241,5 +269,35 @@ describe("TelegramRuntimeClient", () => {
     expect(message.text).toBe("hello");
     expect(message.outgoing).toBe(true);
     expect(message.peer?.id).toBe("321");
+  });
+
+  it("treats rejected disconnect promises as reconnectable errors", async () => {
+    const client = new RejectingDisconnectClient(new Error("socket closed"));
+    const runtime = new TelegramRuntimeClient({
+      apiHash: "hash",
+      apiId: 123,
+      phone: "+3900000000",
+      reconnectMaxMs: 30000,
+      reconnectMinMs: 2000,
+      sessionString: "SESSION"
+    });
+    const markDisconnected = vi.fn();
+    const scheduleReconnect = vi.fn();
+
+    (runtime as any).sessionController = {
+      connect: async () => client,
+      getClient: () => client,
+      getStatus: () => ({ label: "Connected", state: "connected" }),
+      markDisconnected,
+      onStatus: () => () => undefined
+    };
+    (runtime as any).scheduleReconnect = scheduleReconnect;
+
+    (runtime as any).attachClient(client);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(markDisconnected).toHaveBeenCalledWith("socket closed");
+    expect(scheduleReconnect).toHaveBeenCalledTimes(1);
   });
 });

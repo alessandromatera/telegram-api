@@ -43,6 +43,22 @@ class FakeClient implements TelegramClientLike {
   }
 }
 
+class StartFailureClient implements TelegramClientLike {
+  public readonly session = {
+    save: () => "SESSION"
+  };
+
+  async disconnect(): Promise<void> {
+    return;
+  }
+
+  async start(options: TelegramStartOptions): Promise<void> {
+    void options.phoneNumber();
+    options.onError(new Error("WAN down"));
+    throw new Error("WAN down");
+  }
+}
+
 function credentials(): ConnectionCredentials {
   return {
     apiHash: "api-hash",
@@ -91,5 +107,29 @@ describe("SessionController", () => {
 
     expect(controller.getStatus().sessionString).toBe("PASSWORD-SESSION");
   });
-});
 
+  it("does not leak background auth failures as unhandled rejections", async () => {
+    const controller = new SessionController({
+      clientFactory: () => new StartFailureClient()
+    });
+    const unhandled: unknown[] = [];
+    const handleUnhandled = (error: unknown) => {
+      unhandled.push(error);
+    };
+
+    process.on("unhandledRejection", handleUnhandled);
+
+    try {
+      controller.startConnect(credentials());
+
+      const errorStatus = await controller.waitForState(["error"], 100);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(errorStatus.state).toBe("error");
+      expect(errorStatus.error).toBe("WAN down");
+      expect(unhandled).toHaveLength(0);
+    } finally {
+      process.off("unhandledRejection", handleUnhandled);
+    }
+  });
+});

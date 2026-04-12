@@ -197,16 +197,25 @@ export class TelegramRuntimeClient {
 
     const disconnectedPromise = client.disconnected;
     if (disconnectedPromise && typeof disconnectedPromise.then === "function") {
-      void disconnectedPromise.then(() => {
-        if (this.shuttingDown || this.manualDisconnect || this.currentClient !== client) {
-          return;
+      void disconnectedPromise.then(
+        () => {
+          this.handleDisconnect(client, "Telegram disconnected.");
+        },
+        (error) => {
+          this.handleDisconnect(client, formatError(error));
         }
-
-        this.currentClient = undefined;
-        this.sessionController.markDisconnected("Telegram disconnected.");
-        this.scheduleReconnect();
-      });
+      );
     }
+  }
+
+  private handleDisconnect(client: TelegramClientLike, error: string): void {
+    if (this.shuttingDown || this.manualDisconnect || this.currentClient !== client) {
+      return;
+    }
+
+    this.currentClient = undefined;
+    this.sessionController.markDisconnected(error);
+    this.scheduleReconnect();
   }
 
   private clearReconnectTimer(): void {
