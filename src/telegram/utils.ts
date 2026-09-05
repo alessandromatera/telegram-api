@@ -148,6 +148,42 @@ export function peerInputFromValue(value: unknown): string | number | Record<str
   throw new Error("Telegram peer must be a username, numeric id, or peer object.");
 }
 
+// Node-RED never sends a stored password-typed credential to the editor. It puts
+// this placeholder in the input instead, so anything read straight back out of
+// the DOM can carry it in place of the real secret.
+export const CREDENTIAL_PLACEHOLDER = "__PWRD__";
+
+// GramJS drives its login as `while (1) { try { ... } catch (err) { if (await
+// onError(err)) throw } }`, so onError is the only way out of that loop. Only a
+// bad piece of user input is worth another pass: those pause on a fresh prompt,
+// so the loop is paced by the person typing. Everything else - a rejected
+// api_hash above all - fails instantly and locally, and retrying it spins the
+// loop with no network delay to throttle it.
+const RETRYABLE_AUTH_ERRORS = new Set([
+  "PHONE_CODE_EMPTY",
+  "PHONE_CODE_INVALID",
+  "PASSWORD_HASH_INVALID",
+  "Code is empty",
+  "Password is empty"
+]);
+
+export function isRetryableAuthError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+
+  const candidate = error as { errorMessage?: unknown; message?: unknown };
+  // RPC failures carry the Telegram code on errorMessage; GramJS throws plain
+  // Errors for the two empty-input cases.
+  for (const value of [candidate.errorMessage, candidate.message]) {
+    if (typeof value === "string" && RETRYABLE_AUTH_ERRORS.has(value)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export function sanitizeCredentials(input: {
   apiHash?: unknown;
   apiId?: unknown;
@@ -170,6 +206,15 @@ export function sanitizeCredentials(input: {
 
   if (!apiHash) {
     throw new Error("A valid Telegram api_hash is required.");
+  }
+
+  // Backstop for a caller that skipped the placeholder resolution: handing this
+  // to GramJS as a real api_hash is what turned every login attempt into an
+  // instant, unthrottled RPC failure.
+  if (apiHash === CREDENTIAL_PLACEHOLDER || sessionString === CREDENTIAL_PLACEHOLDER) {
+    throw new Error(
+      "Telegram credentials still hold the Node-RED placeholder. Re-enter the api_hash in the config node and deploy."
+    );
   }
 
   if (!phone) {

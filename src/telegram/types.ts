@@ -20,6 +20,15 @@ export interface ConnectionCredentials {
   sessionString?: string;
 }
 
+// What the admin endpoints hand in: unvalidated, straight off the wire.
+// sanitizeCredentials turns this into ConnectionCredentials.
+export interface ConnectionCredentialsInput {
+  apiHash?: unknown;
+  apiId?: unknown;
+  phone?: unknown;
+  sessionString?: unknown;
+}
+
 export interface NormalizedPeer {
   id?: string;
   raw?: unknown;

@@ -7,15 +7,20 @@ import type {
   AuthState,
   AuthStatus,
   ConnectionCredentials,
+  ConnectionCredentialsInput,
   SessionControllerOptions,
   TelegramClientLike
 } from "./types";
-import { formatError, sanitizeCredentials, statusLabel } from "./utils";
+import { formatError, isRetryableAuthError, sanitizeCredentials, statusLabel } from "./utils";
 
 // Tearing down a wedged socket can hang. GramJS sets `_destroyed` synchronously,
 // before it awaits anything, so the update loop is already doomed by the time we
 // stop waiting on the rest of the cleanup.
 const CLIENT_TEARDOWN_TIMEOUT_MS = 5000;
+
+// Bounded so a retryable failure that stops re-prompting cannot spin the login
+// loop unattended.
+const MAX_RETRYABLE_AUTH_ERRORS = 5;
 
 async function withTimeout(operation: Promise<unknown>, timeoutMs: number): Promise<void> {
   let timer: NodeJS.Timeout | undefined;
@@ -50,6 +55,7 @@ function defaultClientFactory(credentials: ConnectionCredentials): TelegramClien
 
 export class SessionController {
   private readonly clientFactory: (credentials: ConnectionCredentials) => TelegramClientLike;
+  private authErrorCount = 0;
   private client?: TelegramClientLike;
   private codeDeferred?: Deferred<string>;
   private connectPromise?: Promise<TelegramClientLike>;
@@ -65,7 +71,7 @@ export class SessionController {
     this.clientFactory = options.clientFactory ?? defaultClientFactory;
   }
 
-  async connect(credentials: ConnectionCredentials): Promise<TelegramClientLike> {
+  async connect(credentials: ConnectionCredentialsInput): Promise<TelegramClientLike> {
     this.startConnect(credentials);
 
     if (!this.connectPromise) {
@@ -80,7 +86,9 @@ export class SessionController {
 
     await this.disconnectClient();
 
-    const nextSessionString = options.clearSession ? undefined : this.status.sessionString;
+    // null, not undefined: updateStatus falls back to the current value on
+    // undefined, so clearSession never actually cleared anything.
+    const nextSessionString = options.clearSession ? null : this.status.sessionString;
 
     if (options.clearSession && this.currentCredentials) {
       this.currentCredentials = {
@@ -119,7 +127,7 @@ export class SessionController {
     };
   }
 
-  startConnect(credentials: ConnectionCredentials): AuthStatus {
+  startConnect(credentials: ConnectionCredentialsInput): AuthStatus {
     this.currentCredentials = sanitizeCredentials(credentials);
 
     if (!this.connectPromise) {
@@ -224,14 +232,20 @@ export class SessionController {
   private async doConnect(credentials: ConnectionCredentials): Promise<TelegramClientLike> {
     await this.disconnectClient();
 
-    const client = this.clientFactory(credentials);
-    this.client = client;
+    this.authErrorCount = 0;
     this.updateStatus("connecting");
 
+    // Inside the try: the factory throws synchronously on a malformed session
+    // string, and leaving it outside meant that failure never reached the catch
+    // below, so the status stayed "connecting" and the editor showed nothing.
     try {
+      const client = this.clientFactory(credentials);
+      this.client = client;
+
       await client.start({
         onError: (error) => {
           this.updateStatus("error", formatError(error));
+          return this.shouldStopAuth(error);
         },
         password: async () => {
           this.passwordDeferred = createDeferred<string>();
@@ -265,6 +279,20 @@ export class SessionController {
     }
   }
 
+  // GramJS asks onError whether to give up, and treats a falsy answer as "retry".
+  // Only a mistyped code or password earns another pass, and even then a bounded
+  // number: each retry re-prompts, so a client that somehow stops waiting for
+  // input must not be able to spin the loop unattended.
+  private shouldStopAuth(error: unknown): boolean {
+    this.authErrorCount += 1;
+
+    if (this.authErrorCount > MAX_RETRYABLE_AUTH_ERRORS) {
+      return true;
+    }
+
+    return !isRetryableAuthError(error);
+  }
+
   private rejectPendingInputs(error: Error): void {
     if (this.codeDeferred) {
       this.codeDeferred.reject(error);
@@ -277,11 +305,11 @@ export class SessionController {
     }
   }
 
-  private updateStatus(state: AuthState, error?: string, sessionString?: string): void {
+  private updateStatus(state: AuthState, error?: string, sessionString?: string | null): void {
     this.status = {
       error,
       label: statusLabel(state, error),
-      sessionString: sessionString ?? this.status.sessionString,
+      sessionString: sessionString === null ? undefined : sessionString ?? this.status.sessionString,
       state
     };
 

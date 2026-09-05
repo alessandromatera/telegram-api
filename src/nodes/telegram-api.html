@@ -293,8 +293,12 @@
         $("#telegram-api-connect").on("click", function(event) {
           event.preventDefault();
 
+          // nodeId lets the runtime swap Node-RED's "__PWRD__" placeholder for the
+          // credential actually stored for this node. The editor is never given
+          // the real secret, so an unchanged password input holds the placeholder.
           apiRequest("POST", "telegram-api/auth/connect", $.extend({
-            authToken: authToken
+            authToken: authToken,
+            nodeId: node.id
           }, readConfigCredentials()))
             .done(function(response) {
               authToken = response.authToken;

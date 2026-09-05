@@ -4,7 +4,7 @@ import { parseHistoryRequest, parseSendRequest } from "./input-parsers";
 import { SessionController } from "../telegram/session-controller";
 import { TelegramRuntimeClient } from "../telegram/runtime-client";
 import type { AuthStatus } from "../telegram/types";
-import { formatError } from "../telegram/utils";
+import { CREDENTIAL_PLACEHOLDER, formatError } from "../telegram/utils";
 
 type NodeRedRuntime = any;
 type NodeInstance = any;
@@ -120,6 +120,36 @@ function getPermissionMiddleware(RED: NodeRedRuntime, permission: string) {
   return RED.auth?.needsPermission ? RED.auth.needsPermission(permission) : (_req: HttpRequest, _res: HttpResponse, next: () => void) => next();
 }
 
+// The editor reads its inputs straight out of the DOM, and Node-RED fills a
+// password-typed input with CREDENTIAL_PLACEHOLDER rather than the stored secret.
+// A placeholder therefore means "unchanged, use what is saved" - never a literal
+// value to hand to Telegram.
+function resolveSecret(supplied: unknown, stored: unknown): string | undefined {
+  if (supplied === CREDENTIAL_PLACEHOLDER) {
+    return typeof stored === "string" && stored ? stored : undefined;
+  }
+
+  if (typeof supplied === "string" && supplied.trim()) {
+    return supplied.trim();
+  }
+
+  // An empty field is a deliberate clear (the Disconnect button blanks the
+  // session), so it must not fall back to the stored value.
+  return undefined;
+}
+
+function resolveConnectCredentials(RED: NodeRedRuntime, body: Record<string, unknown> | undefined) {
+  const nodeId = typeof body?.nodeId === "string" ? body.nodeId : undefined;
+  const stored = (nodeId && RED.nodes.getCredentials?.(nodeId)) || {};
+
+  return {
+    apiHash: resolveSecret(body?.apiHash, stored.apiHash),
+    apiId: body?.apiId,
+    phone: body?.phone,
+    sessionString: resolveSecret(body?.sessionString, stored.sessionString)
+  };
+}
+
 function getConfigNode(RED: NodeRedRuntime, id: string): NodeInstance {
   const node = RED.nodes.getNode(id);
   if (!node || !node.client) {
@@ -143,12 +173,7 @@ module.exports = function registerTelegramApiNodes(RED: NodeRedRuntime) {
     asyncHandler(async (req, res) => {
       const { authToken, record } = getOrCreateTempAuth(req.body?.authToken);
       await record.controller.disconnect();
-      record.controller.startConnect({
-        apiHash: req.body?.apiHash,
-        apiId: req.body?.apiId,
-        phone: req.body?.phone,
-        sessionString: req.body?.sessionString
-      });
+      record.controller.startConnect(resolveConnectCredentials(RED, req.body));
 
       const status = await waitForStableAuthState(record.controller);
       res.json({ authToken, status });
