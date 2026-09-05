@@ -12,6 +12,31 @@ import type {
 } from "./types";
 import { formatError, sanitizeCredentials, statusLabel } from "./utils";
 
+// Tearing down a wedged socket can hang. GramJS sets `_destroyed` synchronously,
+// before it awaits anything, so the update loop is already doomed by the time we
+// stop waiting on the rest of the cleanup.
+const CLIENT_TEARDOWN_TIMEOUT_MS = 5000;
+
+async function withTimeout(operation: Promise<unknown>, timeoutMs: number): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+
+  try {
+    await Promise.race([
+      operation,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error("Telegram client teardown timed out."));
+        }, timeoutMs);
+        timer.unref?.();
+      })
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
+
 function defaultClientFactory(credentials: ConnectionCredentials): TelegramClientLike {
   return new TelegramClient(
     new StringSession(credentials.sessionString ?? ""),
@@ -177,12 +202,22 @@ export class SessionController {
     const activeClient = this.client;
     this.client = undefined;
 
-    if (activeClient) {
-      try {
-        await activeClient.disconnect();
-      } catch {
-        // Best-effort cleanup for reconnect/login cancellation.
-      }
+    if (!activeClient) {
+      return;
+    }
+
+    // destroy(), not disconnect(): GramJS runs its update loop as
+    // `while (!client._destroyed)`, and only destroy() sets that flag. A merely
+    // disconnected client keeps pinging a dead sender forever - one
+    // "Error: TIMEOUT" every ~39s - while holding its sender, session and entity
+    // cache reachable. Those orphans accumulate across reconnects until V8 hits
+    // its heap limit and aborts the process.
+    const teardown = activeClient.destroy?.bind(activeClient) ?? activeClient.disconnect.bind(activeClient);
+
+    try {
+      await withTimeout(teardown(), CLIENT_TEARDOWN_TIMEOUT_MS);
+    } catch {
+      // Best-effort cleanup for reconnect/login cancellation.
     }
   }
 

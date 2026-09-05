@@ -20,6 +20,16 @@ import type {
 } from "./types";
 import { formatError, peerInputFromValue } from "./utils";
 
+// GramJS flips `disconnected` while its own sender reconnects, so a drop has to
+// persist across several polls before we tear the client down - otherwise we kill
+// a client that was about to recover on its own.
+const DISCONNECT_POLL_INTERVAL_MS = 5000;
+const DISCONNECT_POLL_STRIKES = 3;
+
+function isThenable(value: unknown): value is Promise<unknown> {
+  return typeof value === "object" && value !== null && typeof (value as Promise<unknown>).then === "function";
+}
+
 interface RuntimeEvents {
   message: [NormalizedMessage];
   status: [AuthStatus];
@@ -52,6 +62,8 @@ export class TelegramRuntimeClient {
       : event;
     this.events.emit("message", normalizeMessage(message));
   };
+  private disconnectPollTimer?: NodeJS.Timeout;
+  private disconnectStrikes = 0;
   private reconnectAttempt = 0;
   private reconnectTimer?: NodeJS.Timeout;
   private readonly sessionController = new SessionController();
@@ -194,10 +206,14 @@ export class TelegramRuntimeClient {
     this.detachClient();
     this.currentClient = client;
     client.addEventHandler?.(this.onIncomingMessage, new NewMessage({}));
+    this.watchDisconnect(client);
+  }
 
-    const disconnectedPromise = client.disconnected;
-    if (disconnectedPromise && typeof disconnectedPromise.then === "function") {
-      void disconnectedPromise.then(
+  private watchDisconnect(client: TelegramClientLike): void {
+    const disconnected = client.disconnected;
+
+    if (isThenable(disconnected)) {
+      void disconnected.then(
         () => {
           this.handleDisconnect(client, "Telegram disconnected.");
         },
@@ -205,7 +221,45 @@ export class TelegramRuntimeClient {
           this.handleDisconnect(client, formatError(error));
         }
       );
+      return;
     }
+
+    // A real GramJS client answers with a boolean, so the thenable branch above
+    // never ran against one and nothing was watching the connection at all.
+    if (typeof disconnected !== "boolean") {
+      return;
+    }
+
+    this.disconnectStrikes = 0;
+    this.disconnectPollTimer = setInterval(() => {
+      if (this.currentClient !== client) {
+        this.clearDisconnectPoll();
+        return;
+      }
+
+      if (client.disconnected !== true) {
+        this.disconnectStrikes = 0;
+        return;
+      }
+
+      this.disconnectStrikes += 1;
+      if (this.disconnectStrikes < DISCONNECT_POLL_STRIKES) {
+        return;
+      }
+
+      this.clearDisconnectPoll();
+      this.handleDisconnect(client, "Telegram connection dropped.");
+    }, DISCONNECT_POLL_INTERVAL_MS);
+    this.disconnectPollTimer.unref?.();
+  }
+
+  private clearDisconnectPoll(): void {
+    if (this.disconnectPollTimer) {
+      clearInterval(this.disconnectPollTimer);
+      this.disconnectPollTimer = undefined;
+    }
+
+    this.disconnectStrikes = 0;
   }
 
   private handleDisconnect(client: TelegramClientLike, error: string): void {
@@ -235,6 +289,8 @@ export class TelegramRuntimeClient {
   }
 
   private detachClient(): void {
+    this.clearDisconnectPoll();
+
     if (this.currentClient) {
       this.currentClient.removeEventHandler?.(this.onIncomingMessage);
       this.currentClient = undefined;

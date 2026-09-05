@@ -89,8 +89,11 @@ export interface TelegramStartOptions {
 export interface TelegramClientLike {
   addEventHandler?(handler: (event: unknown) => void, eventBuilder?: unknown): void;
   connect?(): Promise<void>;
+  destroy?(): Promise<void>;
   disconnect(): Promise<void>;
-  disconnected?: Promise<unknown>;
+  // GramJS exposes this as a boolean getter. Test doubles model it as a promise,
+  // and typing it as promise-only is what let the runtime watch silently no-op.
+  disconnected?: boolean | Promise<unknown>;
   getEntity?(input: unknown): Promise<unknown>;
   getInputEntity?(input: unknown): Promise<unknown>;
   getMessages?(entity: unknown, options: Record<string, unknown>): Promise<unknown[]>;
