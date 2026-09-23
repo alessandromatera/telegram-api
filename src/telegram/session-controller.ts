@@ -22,6 +22,12 @@ const CLIENT_TEARDOWN_TIMEOUT_MS = 5000;
 // loop unattended.
 const MAX_RETRYABLE_AUTH_ERRORS = 5;
 
+// Once the socket is up, start() still needs an answer from Telegram before it
+// finishes or asks for a code. If the link drops in that window and GramJS's own
+// reconnect gives up, the request is never answered nor rejected, so an attempt
+// that sits in "connecting" this long is abandoned and retried.
+const CONNECT_STALL_TIMEOUT_MS = 2 * 60 * 1000;
+
 async function withTimeout(operation: Promise<unknown>, timeoutMs: number): Promise<void> {
   let timer: NodeJS.Timeout | undefined;
 
@@ -242,23 +248,40 @@ export class SessionController {
       const client = this.clientFactory(credentials);
       this.client = client;
 
-      await client.start({
-        onError: (error) => {
-          this.updateStatus("error", formatError(error));
-          return this.shouldStopAuth(error);
-        },
-        password: async () => {
-          this.passwordDeferred = createDeferred<string>();
-          this.updateStatus("awaiting_password");
-          return this.passwordDeferred.promise;
-        },
-        phoneCode: async () => {
-          this.codeDeferred = createDeferred<string>();
-          this.updateStatus("awaiting_code");
-          return this.codeDeferred.promise;
-        },
-        phoneNumber: async () => credentials.phone
-      });
+      // Connect before start(): GramJS's connect() resolves false when it runs out
+      // of retries, and start() ignores that and goes on to an invoke() that waits
+      // for a successful connect forever. Starting while the network was down
+      // therefore never settled, leaving the status on "connecting" for good and
+      // every later send or history call queued behind the same promise.
+      if (client.connect && (await client.connect()) === false) {
+        throw new Error("Could not reach Telegram.");
+      }
+
+      const stall = this.rejectOnStall(CONNECT_STALL_TIMEOUT_MS);
+      try {
+        await Promise.race([
+          client.start({
+            onError: (error) => {
+              this.updateStatus("error", formatError(error));
+              return this.shouldStopAuth(error);
+            },
+            password: async () => {
+              this.passwordDeferred = createDeferred<string>();
+              this.updateStatus("awaiting_password");
+              return this.passwordDeferred.promise;
+            },
+            phoneCode: async () => {
+              this.codeDeferred = createDeferred<string>();
+              this.updateStatus("awaiting_code");
+              return this.codeDeferred.promise;
+            },
+            phoneNumber: async () => credentials.phone
+          }),
+          stall.promise
+        ]);
+      } finally {
+        stall.cancel();
+      }
 
       const sessionString = client.session.save();
       this.currentCredentials = {
@@ -291,6 +314,40 @@ export class SessionController {
     }
 
     return !isRetryableAuthError(error);
+  }
+
+  // Rejects once the status has sat on "connecting" for timeoutMs. Any other
+  // state stops the clock, so waiting on the user for a code or 2FA password
+  // never counts against it.
+  private rejectOnStall(timeoutMs: number): { cancel(): void; promise: Promise<never> } {
+    let timer: NodeJS.Timeout | undefined;
+    let rejectStall: (error: Error) => void = () => undefined;
+    const promise = new Promise<never>((_resolve, reject) => {
+      rejectStall = reject;
+    });
+
+    const onStatus = (status: AuthStatus) => {
+      clearTimeout(timer);
+      timer = undefined;
+
+      if (status.state === "connecting") {
+        timer = setTimeout(() => {
+          rejectStall(new Error("Telegram stopped responding while connecting."));
+        }, timeoutMs);
+        timer.unref?.();
+      }
+    };
+
+    this.events.on("status", onStatus);
+    onStatus(this.status);
+
+    return {
+      cancel: () => {
+        clearTimeout(timer);
+        this.events.off("status", onStatus);
+      },
+      promise
+    };
   }
 
   private rejectPendingInputs(error: Error): void {

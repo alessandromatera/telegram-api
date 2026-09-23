@@ -97,11 +97,15 @@ export interface TelegramStartOptions {
 
 export interface TelegramClientLike {
   addEventHandler?(handler: (event: unknown) => void, eventBuilder?: unknown): void;
-  connect?(): Promise<void>;
+  // GramJS resolves false, rather than throwing, once it runs out of retries.
+  connect?(): Promise<boolean | void>;
+  // GramJS getter backed by the sender's _userConnected: false while the socket
+  // is down or GramJS is reconnecting it.
+  connected?: boolean;
   destroy?(): Promise<void>;
   disconnect(): Promise<void>;
-  // GramJS exposes this as a boolean getter. Test doubles model it as a promise,
-  // and typing it as promise-only is what let the runtime watch silently no-op.
+  // Test doubles model this as a promise. GramJS's boolean getter is always true
+  // (see watchDisconnect), so only the promise form is worth watching.
   disconnected?: boolean | Promise<unknown>;
   getEntity?(input: unknown): Promise<unknown>;
   getInputEntity?(input: unknown): Promise<unknown>;

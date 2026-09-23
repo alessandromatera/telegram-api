@@ -20,7 +20,7 @@ import type {
 } from "./types";
 import { formatError, peerInputFromValue } from "./utils";
 
-// GramJS flips `disconnected` while its own sender reconnects, so a drop has to
+// GramJS drops `connected` while its own sender reconnects, so a drop has to
 // persist across several polls before we tear the client down - otherwise we kill
 // a client that was about to recover on its own.
 const DISCONNECT_POLL_INTERVAL_MS = 5000;
@@ -224,9 +224,11 @@ export class TelegramRuntimeClient {
       return;
     }
 
-    // A real GramJS client answers with a boolean, so the thenable branch above
-    // never ran against one and nothing was watching the connection at all.
-    if (typeof disconnected !== "boolean") {
+    // Poll `connected`, not `disconnected`. GramJS's `disconnected` getter reads
+    // MTProtoSender._disconnected, which the constructor sets to true and nothing
+    // ever clears, so it reported every healthy connection as dropped and this
+    // poll tore the client down and rebuilt it every ~15s.
+    if (typeof client.connected !== "boolean") {
       return;
     }
 
@@ -237,7 +239,7 @@ export class TelegramRuntimeClient {
         return;
       }
 
-      if (client.disconnected !== true) {
+      if (client.connected === true) {
         this.disconnectStrikes = 0;
         return;
       }
