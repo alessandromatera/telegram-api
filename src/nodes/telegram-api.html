@@ -199,18 +199,6 @@
       };
     }
 
-    function registerSimpleNode(type, options) {
-      RED.nodes.registerType(type, $.extend(true, {
-        align: "right",
-        category: "telegram-api",
-        color: "#CFE2F3",
-        defaults: {
-          account: { required: true, type: "telegram-api-config" },
-          name: { value: "" }
-        }
-      }, options));
-    }
-
     RED.nodes.registerType("telegram-api-config", {
       category: "config",
       credentials: {
@@ -409,7 +397,14 @@
       }
     });
 
-    registerSimpleNode("telegram-api-in", {
+    // Each definition is written out in full, shared fields and all. The Node-RED
+    // flow library finds a palette's nodes by parsing this file for
+    // registerType("literal", { inline object }) calls, so a shared helper that
+    // passed the type as a variable hid these three nodes from the library.
+    RED.nodes.registerType("telegram-api-in", {
+      align: "right",
+      category: "telegram-api",
+      color: "#CFE2F3",
       defaults: {
         account: { required: true, type: "telegram-api-config" },
         includeRaw: { value: false },
@@ -424,7 +419,10 @@
       outputs: 1
     });
 
-    registerSimpleNode("telegram-api-send", {
+    RED.nodes.registerType("telegram-api-send", {
+      align: "right",
+      category: "telegram-api",
+      color: "#CFE2F3",
       defaults: {
         account: { required: true, type: "telegram-api-config" },
         name: { value: "" },
@@ -438,7 +436,10 @@
       outputs: 1
     });
 
-    registerSimpleNode("telegram-api-history", {
+    RED.nodes.registerType("telegram-api-history", {
+      align: "right",
+      category: "telegram-api",
+      color: "#CFE2F3",
       defaults: {
         account: { required: true, type: "telegram-api-config" },
         includeRaw: { value: false },

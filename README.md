@@ -62,7 +62,9 @@ The runtime reconnects with the stored session string after restart. If you open
 
 ## Example Node-RED flow
 
-Import this JSON from the Node-RED editor (`Menu -> Import -> Clipboard`) to get a starter flow with:
+The same three nodes are also available as ready-made examples in the Node-RED editor under `Menu -> Import -> Examples -> @alessandromatera/node-red-telegram-api`.
+
+Or import this JSON from the Node-RED editor (`Menu -> Import -> Clipboard`) to get a starter flow with:
 
 - one `telegram-api-config` node
 - one `telegram-api-send` example that sends to Saved Messages
@@ -124,7 +126,7 @@ After importing:
     "z": "a1f4d7c2e9b00101",
     "name": "Send to Saved Messages",
     "account": "b2f4d7c2e9b00102",
-    "peer": "@savedmessages",
+    "peer": "me",
     "x": 470,
     "y": 100,
     "wires": [
@@ -210,7 +212,7 @@ After importing:
     "z": "a1f4d7c2e9b00101",
     "name": "Saved Messages History",
     "account": "b2f4d7c2e9b00102",
-    "peer": "@savedmessages",
+    "peer": "me",
     "limit": "5",
     "includeRaw": false,
     "x": 460,
@@ -239,7 +241,7 @@ After importing:
 ]
 ```
 
-You can replace `@savedmessages` with any username or numeric peer id once the flow is working.
+The peer `me` is your own Saved Messages chat. You can replace it with any username or numeric peer id once the flow is working.
 
 ## Message contract
 

@@ -1,0 +1,65 @@
+[
+  {
+    "id": "7e1a0c5d2b9f4101",
+    "type": "comment",
+    "name": "Send a message to your Saved Messages",
+    "info": "Open the send node and pick your Telegram account in **Account**\n(or add one: API ID, API hash and phone, then **Connect** and **Deploy**).\n\nThe peer `me` is your own Saved Messages chat. Replace it with a\n`@username` or numeric id, or set `msg.telegram.peer` per message.",
+    "x": 210,
+    "y": 60,
+    "wires": []
+  },
+  {
+    "id": "7e1a0c5d2b9f4102",
+    "type": "inject",
+    "name": "Send test message",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "hello from Node-RED",
+    "payloadType": "str",
+    "x": 170,
+    "y": 120,
+    "wires": [
+      [
+        "7e1a0c5d2b9f4103"
+      ]
+    ]
+  },
+  {
+    "id": "7e1a0c5d2b9f4103",
+    "type": "telegram-api-send",
+    "account": "",
+    "name": "Send to Saved Messages",
+    "peer": "me",
+    "x": 430,
+    "y": 120,
+    "wires": [
+      [
+        "7e1a0c5d2b9f4104"
+      ]
+    ]
+  },
+  {
+    "id": "7e1a0c5d2b9f4104",
+    "type": "debug",
+    "name": "Sent message",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 670,
+    "y": 120,
+    "wires": []
+  }
+]

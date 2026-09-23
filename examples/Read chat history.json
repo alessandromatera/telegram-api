@@ -1,0 +1,68 @@
+[
+  {
+    "id": "7e1a0c5d2b9f4301",
+    "type": "comment",
+    "name": "Read the last messages of a chat",
+    "info": "Open the history node and pick your Telegram account in **Account**\n(or add one: API ID, API hash and phone, then **Connect** and **Deploy**).\n\nThe peer `me` is your own Saved Messages chat. Point it at a `@username`\nor channel and tick **Unread Only** to get just the messages you have not\nread yet. `msg.limit`, `msg.offsetId` and `msg.telegram.peer` override\nthe node settings per message.",
+    "x": 190,
+    "y": 60,
+    "wires": []
+  },
+  {
+    "id": "7e1a0c5d2b9f4302",
+    "type": "inject",
+    "name": "Read last 5",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 150,
+    "y": 120,
+    "wires": [
+      [
+        "7e1a0c5d2b9f4303"
+      ]
+    ]
+  },
+  {
+    "id": "7e1a0c5d2b9f4303",
+    "type": "telegram-api-history",
+    "account": "",
+    "name": "Saved Messages history",
+    "includeRaw": false,
+    "limit": 5,
+    "peer": "me",
+    "unreadOnly": false,
+    "x": 390,
+    "y": 120,
+    "wires": [
+      [
+        "7e1a0c5d2b9f4304"
+      ]
+    ]
+  },
+  {
+    "id": "7e1a0c5d2b9f4304",
+    "type": "debug",
+    "name": "Messages",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 620,
+    "y": 120,
+    "wires": []
+  }
+]
